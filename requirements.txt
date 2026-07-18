@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+sqlalchemy[asyncio]
+asyncpg
+alembic
+chromadb
+PyMuPDF
+pdfplumber
+tiktoken
+openai
+python-multipart
+pytest
+pytest-asyncio
+httpx
