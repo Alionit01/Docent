@@ -155,10 +155,21 @@ async function doFinalQuiz() {
   showResponse("resp-final-quiz", status, data);
 }
 
+async function doListDocs() {
+  const limit = $("list-limit").value.trim() || 50;
+  const offset = $("list-offset").value.trim() || 0;
+  const { status, data } = await sendGet(`/api/documents?limit=${limit}&offset=${offset}`);
+  showResponse("resp-list-docs", status, data);
+  if (Array.isArray(data) && data.length) {
+    setState("docId", data[0].id);
+  }
+}
+
 // ---- Wiring ----
 
 const actions = {
   "upload": doUpload,
+  "list-docs": doListDocs,
   "get-doc": doGetDoc,
   "poll-doc": doPollDoc,
   "roadmap": doRoadmap,

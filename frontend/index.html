@@ -17,6 +17,7 @@
   <div class="layout">
     <nav id="nav">
       <button class="nav-item" data-panel="upload">1. Upload PDF</button>
+      <button class="nav-item" data-panel="list-docs">1b. List Documents</button>
       <button class="nav-item" data-panel="get-doc">2. Get Document</button>
       <button class="nav-item" data-panel="roadmap">3. Roadmap</button>
       <button class="nav-item" data-panel="lesson">4. Lesson + Quiz</button>
@@ -36,6 +37,15 @@
         <label>PDF File: <input type="file" id="upload-file" accept="application/pdf" /></label>
         <button class="send" data-action="upload">Send</button>
         <div class="response" id="resp-upload"></div>
+      </section>
+
+      <!-- 1b. List Documents -->
+      <section class="panel hidden" id="panel-list-docs">
+        <h2>GET /api/documents</h2>
+        <label>Limit: <input id="list-limit" value="50" size="5" /></label>
+        <label>Offset: <input id="list-offset" value="0" size="5" /></label>
+        <button class="send" data-action="list-docs">Send</button>
+        <div class="response" id="resp-list-docs"></div>
       </section>
 
       <!-- 2. Get Document -->
