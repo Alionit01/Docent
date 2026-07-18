@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://docent:docent@localhost:5432/docent"
+    database_url: str = "postgresql+asyncpg://postgres:root@localhost:5432/docent"
     llm_provider: str = "groq"
     llm_api_key: str = ""
     llm_base_url: str = "https://api.groq.com/openai/v1"
