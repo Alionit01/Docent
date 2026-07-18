@@ -1,0 +1,583 @@
+Idea 2: Document Teaching Engine
+Docent —
+Technical Specification
+An engineering spec for an AI system that transforms static documents into adaptive, goal-oriented curricula. Not a pitch. Implementation blueprint.
+abstract
+01
+Abstract
+This specification proposes
+Docent
+, an AI Document Teaching System that transforms static unstructured documents into adaptive goal-oriented learning curricula. Unlike conventional Retrieval-Augmented Generation (RAG) systems optimized for question answering, Docent operationalizes pedagogy as a first-class concern. The system parses document semantics, infers latent conceptual hierarchies, and synthesizes a structured learning roadmap aligned with an explicit learner goal such as exam preparation, conceptual understanding, implementation, or research synthesis.
+The architecture comprises an ingestion pipeline (PyMuPDF extraction, header/footer normalization, 800-token chunking with 100-token overlap, embedding via text-embedding-3-small, storage in PostgreSQL + pgvector) and a pedagogical orchestration layer: a Goal Router that conditions system prompts on learner intent, a Lesson Engine that generates grounded explanations with analogies and key takeaways, and a Quiz Engine that produces formative assessments. An LLM orchestrator composes lessons using cited vector retrieval to ensure grounding, while a Progress Service tracks mastery, identifies weak areas, and sequences remediation. This represents a shift from information retrieval to knowledge construction.
+layman
+02
+Layman Terms
+What it is NOT
+Chat with PDF = Librarian
+You ask “what does page 42 say about X?” and it finds the page. It doesn’t know the story. You still have to figure out what matters, in what order, and whether you understood it. Every question needs a good prompt.
+What it IS
+Docent = Private Tutor
+You hand it a 300-page PDF on Quantum Computing and say “I need this for a job interview in 2 weeks.” It reads the whole thing, figures out the narrative arc, knows you need implementation not theory, and teaches you chapter 1, checks if you got it, explains simpler if not, then moves on.
+No prompt engineering. No “summarize chapter 3”. The user just learns. The system decides what to teach, how deep to go, and when to quiz. The goal selector (“Pass Exam”, “Implement”, “Understand”, “Research Deep Dive”) rewires the tutor’s entire behavior: exam mode emphasizes definitions and mnemonics, implement mode emphasizes code, edge cases, and API details, research mode emphasizes proofs and limitations.
+If Chat with PDF is search, Docent is curriculum.
+visualization
+03
+End Product Visualization
+Descriptive walkthrough of what the user sees and feels. The target feeling is calm, reading-focused, like a well-annotated book — not a chatbot.
+Landing
+Drop zone that says “Drop a PDF. Any PDF.” Centered, large, no login wall for hackathon. Drag over state shows dashed border, subtle lift. Accepts only .pdf <50MB. Immediately shows filename and page count once parsed. CTA is silent — uploading auto-advances.
+Goal Modal
+After upload, modal: “Why are you learning this?” Four cards in 2x2: Pass Exam (focus definitions, spaced repetition), Understand Concepts (analogies, visuals), Implement (code, APIs, pitfalls), Research Deep Dive (math, proofs, open problems). Each card changes system prompt, lesson depth, and quiz difficulty. No freeform input to avoid prompt hacking in MVP.
+Processing State
+Not a spinner. Skeleton UI that narrates progress: “Parsing 47 pages · Found 8 chapters · Building 12 lessons”. Uses streaming status from /documents/{id}. Chapter titles appear as they are detected. Feels fast even if LLM calls take 20-30s — we show incremental progress.
+Main Learn View — Split 3 panels
+Left (240px): Chapter roadmap. Ordered list 01 Introduction, 02 OSI Model… with checkmarks, current highlight, estimated time per chapter. Collapsible on mobile into top progress bar. Center (flex): Lesson card. Title, explanation in simple language (Feynman style), Analogy block with left border, Key Takeaway callout, Reference: Page 4 para 2 (click scrolls PDF). Right (320px): PDF preview synced to current lesson’s source refs. Highlighted rect over PDF region. Hideable on <1024px.
+Interaction — Quiz
+Bottom of lesson: 2 quick multiple-choice questions, not 10. If correct: green check, 1-line reinforcement. If wrong: inline expansion explains why the chosen answer is wrong and why correct is right, citing page number. Does not just show answer. “I still don’t get it” link triggers simpler explanation from same chunks.
+Ask Drawer
+Slide-over from right, triggered by ⌘K or “Ask about this lesson”. Answers only from document with citations: [{page, chunk_id, snippet}]. Shows 2-3 citations with snippet preview. If question is outside document, responds: “This isn’t covered in your document — here’s what the document does say about related X”. Prevents hallucination.
+Completion
+Progress 100% triggers summary screen: overall score, weak areas list (e.g., “Subnetting — 40%”), and “Generate final quiz” button that creates 10 mixed questions from weak areas. Option to export progress as markdown. No confetti. Calm checkmark, print-friendly.
+Design Principles
+Reading > Chatting.
+Center panel is prose, not bubbles.
+Grounded.
+Every claim has page ref.
+Calm.
+No typing indicators, no avatars.
+architecture
+04
+System Architecture
+JetBrains Mono, monospace
+[Upload Service] -> [Parser: PyMuPDF] -> [Cleaner] -> [Chunker: 800t / 100 overlap] -> [Embedder] -> [Vector Store: pgvector]
+                                                              |
+                                                              v
+[Goal Router] -> [Lesson Engine] -> [Quiz Engine] -> [LLM Orchestrator] -> [Progress Service]
+      |                |                 |                     |
+      v                v                 v                     v
+  goal=exam      lesson JSON        quiz JSON          grounded answer + citations
+Upload Service
+Validates PDF <50MB, stores file, returns document_id, triggers async pipeline.
+Parser: PyMuPDF
+Extracts text with page numbers, preserves headings via font size heuristic.
+Cleaner
+Removes headers/footers (repeated line detection), de-hyphenates, normalizes whitespace.
+Chunker
+800 tokens, 100 overlap, tiktoken counting, prefers split on heading boundaries if detected.
+Embedder
+Vector Store: pgvector
+Postgres with pgvector extension. HNSW index on embedding. Fallback: Qdrant if ops heavy.
+Goal Router
+Maps goal enum to system prompt template. Exam/Understand/Implement/Research each has distinct instruction set.
+Lesson Engine
+Calls LLM with goal prompt + retrieved chunks + previous lessons. Returns structured JSON lesson.
+Quiz Engine
+Generates 2 MCQs per lesson, distractors plausible, explanation required, grounded in same chunks.
+LLM Orchestrator
+Centralizes OpenAI/DeepSeek calls, JSON mode, retry with backoff, citation enforcement.
+Progress Service
+Tracks completed_lessons, scores, computes weak_areas (<60% threshold), suggests next_lesson_id.
+data-models
+05
+Data Models
+TypeScript types (frontend) and Pydantic v2 models (backend) must stay in sync. Single source of truth is Pydantic, Zod mirrors it.
+typescript
+models.ts
+// TypeScript (shared)
+type GoalType = 'exam' | 'understand' | 'implement' | 'research';
+
+interface Document {
+  id: string;
+  filename: string;
+  status: 'processing' | 'ready' | 'failed';
+  page_count: number;
+  created_at: string; // ISO
+}
+
+interface Chunk {
+  id: string;
+  document_id: string;
+  content: string;
+  embedding?: number[]; // omitted in frontend responses
+  page_number: number;
+  chapter_hint: string | null;
+  token_count: number;
+}
+
+interface Chapter {
+  id: string;
+  document_id: string;
+  title: string;
+  order: number;
+  summary: string;
+  lesson_count: number;
+}
+
+interface Lesson {
+  id: string;
+  chapter_id: string;
+  goal_type: GoalType;
+  title: string;
+  explanation: string; // Feynman style, 150-250w
+  analogy: string;     // real-world analogy
+  key_points: string[]; // 3-4 bullets
+  source_refs: { page: number; chunk_id: string; snippet: string }[];
+}
+
+interface QuizQuestion {
+  id: string;
+  lesson_id: string;
+  question: string;
+  options: string[]; // 4
+  correct_index: number; // 0-3
+  explanation: string;
+}
+
+interface UserProgress {
+  document_id: string;
+  completed_lessons: string[];
+  scores: Record<string, number>; // lesson_id -> 0-100
+  weak_areas: string[]; // chapter titles where <60%
+  overall_progress: number; // 0-100
+}
+python
+schemas.py — Pydantic v2
+from pydantic import BaseModel, Field
+from typing import Literal, List, Dict, Optional
+from datetime import datetime
+
+GoalType = Literal['exam','understand','implement','research']
+
+class Document(BaseModel):
+    id: str
+    filename: str
+    status: Literal['processing','ready','failed']
+    page_count: int = Field(ge=1)
+    created_at: datetime
+
+class Chunk(BaseModel):
+    id: str
+    document_id: str
+    content: str = Field(min_length=20)
+    embedding: Optional[List[float]] = None
+    page_number: int
+    chapter_hint: Optional[str] = None
+    token_count: int
+
+class Chapter(BaseModel):
+    id: str
+    document_id: str
+    title: str
+    order: int
+    summary: str
+    lesson_count: int = 1
+
+class SourceRef(BaseModel):
+    page: int
+    chunk_id: str
+    snippet: str = Field(max_length=300)
+
+class Lesson(BaseModel):
+    id: str
+    chapter_id: str
+    goal_type: GoalType
+    title: str
+    explanation: str
+    analogy: str
+    key_points: List[str] = Field(min_length=2, max_length=5)
+    source_refs: List[SourceRef] = Field(min_length=1, max_length=4)
+
+class QuizQuestion(BaseModel):
+    id: str
+    lesson_id: str
+    question: str
+    options: List[str] = Field(min_length=4, max_length=4)
+    correct_index: int = Field(ge=0, le=3)
+    explanation: str
+
+class UserProgress(BaseModel):
+    document_id: str
+    completed_lessons: List[str] = []
+    scores: Dict[str, int] = {}
+    weak_areas: List[str] = []
+    overall_progress: int = Field(ge=0, le=100)
+tech-stack
+06
+Tech Stack
+Standardized only. No experimental libs. Chosen for speed in 36h.
+Backend — Python
+FastAPI
+API framework. Auto docs, Pydantic native, async. De-facto standard for Python LLM backends.
+Pydantic v2
+Validation. 10x faster than v1, strict types, JSON schema generation for frontend sync.
+SQLAlchemy 2.0 + Alembic
+ORM + migrations. Async support, typed.
+PostgreSQL + pgvector
+DB + vector in one. Avoids separate vector DB ops. HNSW index. Fallback: Qdrant if pgvector setup blocks.
+PyMuPDF / pdfplumber
+PDF parsing. PyMuPDF for speed + layout, pdfplumber fallback for tables.
+tiktoken
+Token counting. Accurate chunking, prevents context overflow.
+OpenAI / DeepSeek SDK
+LLM. Interchangeable via orchestrator adapter. JSON mode required.
+pytest + httpx
+Tests. Async client tests, fast.
+Frontend — TypeScript
+Next.js 14 App Router
+Framework. File routing, server actions, easy Vercel deploy.
+TypeScript strict
+No any. Shared types with backend via generated schemas.
+Tailwind + shadcn/ui
+UI. No custom component library. Copy-paste accessible primitives.
+Zustand
+Client state. 2KB, no boilerplate, perfect for progress + lesson state.
+TanStack Query v5
+Server state. Caching, dedup, background refetch for roadmap/lessons.
+react-pdf / PDF.js
+PDF preview. Optional for MVP, synced highlight via page number.
+Framer Motion
+Motion. Subtle transitions only — card enter, drawer slide. No bouncy.
+Why standardized: every lib above has >10k stars, stable API, and StackOverflow answers from 2023+. In a 36h hackathon we cannot debug alpha libraries. We trade novelty for shipping.
+pipeline
+07
+Ingestion & Pedagogy Pipeline
+Ingestion (6 steps)
+Validate
+— PDF <50MB, MIME application/pdf, 1-100 pages for MVP (first 50 if larger).
+Extract
+— PyMuPDF with page numbers, font size → heading detection.
+Clean
+— Remove repeated headers/footers (line appears >70% pages), de-hyphenate, normalize spaces.
+Chunk
+— 800 tokens, 100 overlap, tiktoken cl100k_base, prefer split on heading, preserve page metadata.
+Embed
+— text-embedding-3-small, batch 64, retry 3x.
+Store
+— Postgres + pgvector, with chapter_hint from heading detection, page_number, token_count.
+Pedagogy (4 steps)
+Goal Router
+— User selects goal. Maps to system prompt variant. Exam: definitions, mnemonics. Implement: code, pitfalls. Research: proofs, limits.
+Roadmap Gen
+— LLM call with first 5k tokens + chunk summaries → JSON: chapters [
+{title, order, summary}
+]. Temperature 0.2.
+Lesson Gen
+— Per chapter, retrieve top 6 chunks (filtered by chapter_hint), include previous lesson titles for continuity, generate explanation + analogy + key_points + source_refs.
+Quiz Gen
+— Same chunks, generate 2 MCQs, distractors must be plausible from document, not generic. Explanation must cite page.
+python
+prompt template — lesson generation
+GOAL_PROMPTS = {
+  "exam": "You are a tutor helping a student pass an exam. Focus on definitions, key formulas, and common trap questions. Use mnemonics.",
+  "understand": "You are a tutor helping a student understand deeply. Use simple language, analogies, and build intuition. Avoid jargon.",
+  "implement": "You are a senior engineer teaching implementation. Focus on APIs, code snippets, edge cases, performance. Be practical.",
+  "research": "You are a research mentor. Focus on mathematical rigor, proofs, assumptions, and open problems. Cite limitations."
+}
+
+LESSON_PROMPT = """
+{goal_instruction}
+
+Context:
+- Previous lessons: {prev_lessons} 
+- Document chunks (with page numbers):
+{chunks_formatted}
+  Each chunk: [Page {{page}}] {{content}}
+
+Task: Generate a lesson for chapter "{chapter_title}" - {chapter_summary}
+Goal: {goal_type}
+
+Return JSON exactly:
+{{
+  "title": "string, <60 chars",
+  "explanation": "150-250 words, Feynman style, grounded in chunks",
+  "analogy": "1 analogy, real-world, <40 words",
+  "key_points": ["3-4 bullets, each <20 words"],
+  "source_refs": [{{"page": int, "chunk_id": str, "snippet": "exact 10-20 words from chunk"}}],
+  "used_chunk_ids": ["ids actually used"]
+}}
+
+Rules:
+- Every factual claim must be in provided chunks.
+- source_refs must be verbatim snippets.
+- If chunk missing info, say "Not covered in document" - do not hallucinate.
+- Keep reading level grade 10-12 unless goal=research.
+"""
+api
+08
+API Routes & Schemas
+POST
+/api/documents/upload
+Upload PDF, start async ingestion. Returns immediately with processing status.
+multipart/form-data
+- file: File (pdf, <50MB)
+201 Created
+{
+  id: "doc_abc123",
+  filename: "quantum.pdf",
+  status: "processing",
+  page_count: 47
+}
+GET
+/api/documents/{id}
+Get document status. Poll until status=ready.
+Path: id string
+200
+{
+  id: "doc_abc123",
+  filename: "quantum.pdf",
+  status: "ready",
+  page_count: 47,
+  created_at: "2024-01-15T10:00:00Z"
+}
+GET
+/api/documents/{id}/roadmap
+Get generated chapters + lesson counts. Generated after ingestion.
+Path: id
+200
+{
+  chapters: [
+    { id: "ch_1", title: "Introduction to Qubits", order: 1, summary: "...", lesson_count: 2 },
+    { id: "ch_2", title: "Superposition", order: 2, summary: "...", lesson_count: 1 }
+  ]
+}
+GET
+/api/documents/{id}/lessons/{lessonId}
+Get lesson + quiz. Goal query changes tone, cached per goal.
+Path: id, lessonId
+Query: goal=exam|understand|implement|research (default understand)
+200
+{
+  lesson: { id, chapter_id, goal_type, title, explanation, analogy, key_points, source_refs },
+  quiz: [ { id, question, options[4], correct_index, explanation } x2 ]
+}
+POST
+/api/documents/{id}/ask
+Grounded Q&A from document only. Used in Ask Drawer.
+{
+  question: "What is decoherence?",
+  lesson_context_id?: "les_123" // optional, biases retrieval
+}
+200
+{
+  answer: "Decoherence is...",
+  citations: [{ page: 12, chunk_id: "chk_9", snippet: "decoherence occurs when..." }],
+  follow_up_questions: ["How to mitigate?", "Difference vs dephasing?"]
+}
+POST
+/api/documents/{id}/lessons/{lessonId}/quiz/submit
+Submit quiz answers, get scoring + weak areas + next lesson.
+{
+  answers: [{ question_id: "q1", selected_index: 2 }]
+}
+200
+{
+  score: 1,
+  total: 2,
+  results: [{ question_id, correct: true, explanation: "Because..." }],
+  weak_areas: ["Superposition"],
+  next_lesson_id: "les_124"
+}
+GET
+/api/documents/{id}/progress
+Full progress. Used for top bar + completion screen.
+Path: id
+200
+{
+  completed_lessons: ["les_1", "les_2"],
+  score_by_lesson: { "les_1": 100, "les_2": 50 },
+  weak_areas: ["OSI Model"],
+  overall_progress: 66
+}
+Request
+Response
+Schemas — Pydantic (backend validation)
+python
+api_schemas.py
+class UploadResponse(BaseModel):
+    id: str
+    filename: str
+    status: Literal['processing'] = 'processing'
+    page_count: int
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=500)
+    lesson_context_id: Optional[str] = None
+
+class Citation(BaseModel):
+    page: int
+    chunk_id: str
+    snippet: str
+
+class AskResponse(BaseModel):
+    answer: str
+    citations: List[Citation] = Field(min_length=1)
+    follow_up_questions: List[str] = Field(max_length=3)
+
+class QuizSubmitRequest(BaseModel):
+    answers: List[Dict]  # [{question_id, selected_index}]
+
+class QuizSubmitResponse(BaseModel):
+    score: int
+    total: int
+    results: List[Dict]  # [{question_id, correct, explanation}]
+    weak_areas: List[str]
+    next_lesson_id: Optional[str]
+
+# Error envelope
+class ErrorResponse(BaseModel):
+    detail: str
+    code: str  # e.g. DOCUMENT_NOT_READY, INVALID_PDF
+    meta: Optional[Dict] = None
+Schemas — Zod (frontend validation, mirrors Pydantic)
+typescript
+apiSchemas.zod.ts
+import { z } from 'zod';
+
+export const GoalType = z.enum(['exam','understand','implement','research']);
+
+export const DocumentSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  status: z.enum(['processing','ready','failed']),
+  page_count: z.number().min(1),
+  created_at: z.string().datetime(),
+});
+
+export const SourceRefSchema = z.object({
+  page: z.number(),
+  chunk_id: z.string(),
+  snippet: z.string().max(300),
+});
+
+export const LessonSchema = z.object({
+  id: z.string(),
+  chapter_id: z.string(),
+  goal_type: GoalType,
+  title: z.string(),
+  explanation: z.string(),
+  analogy: z.string(),
+  key_points: z.array(z.string()).min(2).max(5),
+  source_refs: z.array(SourceRefSchema).min(1).max(4),
+});
+
+export const QuizQuestionSchema = z.object({
+  id: z.string(),
+  lesson_id: z.string(),
+  question: z.string(),
+  options: z.array(z.string()).length(4),
+  correct_index: z.number().min(0).max(3),
+  explanation: z.string(),
+});
+
+export const AskRequestSchema = z.object({
+  question: z.string().min(3).max(500),
+  lesson_context_id: z.string().optional(),
+});
+
+export const ProgressSchema = z.object({
+  document_id: z.string(),
+  completed_lessons: z.array(z.string()),
+  scores: z.record(z.number().min(0).max(100)),
+  weak_areas: z.array(z.string()),
+  overall_progress: z.number().min(0).max(100),
+});
+phases
+09
+Phases — 1.5 Day / 36h Plan for 2 Devs
+Phase 0
+Setup (2h)
+Init Next.js 14 + FastAPI boilerplate
+Postgres + pgvector via Docker, env keys (OpenAI/DeepSeek)
+Deploy pipeline to Vercel (frontend) + Render/Fly (backend)
+Shared types repo or generated openapi.json → zod
+Both
+Phase 1
+Ingestion (6h)
+PDF upload endpoint + validation
+PyMuPDF parse → clean → chunk 800/100 + tiktoken
+Embed batch + store pgvector + HNSW
+RAG ask endpoint works: /ask returns citations
+Dev A (backend)
+Phase 2
+Teaching Engine (8h)
+Roadmap generation prompt → JSON chapters
+Goal Router: 4 system prompts, enum switch
+Lesson generation: retrieval + previous context + JSON mode
+Quiz generation: 2 MCQs per lesson, explanation required
+Dev A (backend) + Dev B (prompts)
+Phase 3
+Frontend Learn Mode (10h)
+Drop zone + goal modal (shadcn Dialog + Cards)
+Learn view: left roadmap (Zustand progress) + center lesson + right PDF preview
+Quiz component: inline expansion on wrong answer
+Progress bar top, ask drawer (Sheet), TanStack Query for caching
+Dev B (frontend)
+Phase 4
+Polish & Demo (6h + 4h buffer)
+Citations: clickable → scroll PDF
+Weak areas calc (<60%), final quiz from weak areas
+Pre-load 3 PDFs for demo (avoid upload fail on stage)
+Record demo, write README, add rate limiting + error toasts
+Both
+—
+What we cut for MVP
+No auth — single tenant, no login wall
+No multi-doc — one doc at a time
+No voice, no whiteboard, no video
+No fine-tuning, no OCR for scanned PDFs
+No collaboration, no sharing links
+Demo script (3 min)
+Drop 47-page Networking PDF (15s)
+Select “Implement” goal (5s)
+Show roadmap generation (20s)
+Teach lesson 1, show citation sync (40s)
+Fail quiz → inline explanation (30s)
+Ask drawer grounded Q&A (30s)
+Completion + weak areas (20s)
+non-goals
+10
+Non-Goals & Edge Cases
+Non-Goals for MVP
+Multi-document teaching
+We teach one document well. Combining 5 PDFs into a curriculum is v1.
+User accounts & history
+No auth, no cloud history. Local progress in Zustand only for hackathon.
+Scanned PDFs / OCR
+Requires Tesseract/PaddleOCR. Cut. Show error: “Scanned PDF — please upload text PDF”.
+Tables, diagrams, math rendering
+Extract as text only. LaTeX rendering nice-to-have, not required.
+Voice / video generation
+No TTS tutor. Reading-first.
+Edge Cases & Handling
+PDF >100 pages
+MVP limit: process first 50 pages. Show banner: “Truncated to 50 pages for speed”.
+PDF <2 pages
+Reject with 400: “Document too short to generate curriculum”.
+Scanned PDF (no extractable text)
+Detect if avg chars per page <50 → error DOCUMENT_IS_SCANNED.
+LLM JSON parse fail
+Retry 2x with repair prompt. If still fail, fallback to raw text lesson without quiz.
+Concurrent uploads
+Queue per IP, max 2 processing. Return 429 with Retry-After.
+Embedding failure
+Retry batch. If fail, store without embedding and use keyword fallback for that doc.
+Ask outside document
+Never hallucinate. Return: “Not in document” + closest related citation.
+Goal switch mid-course
+Allow, but warn “Progress will reset teaching tone”. Keep progress %, regenerate lessons on demand.
+Spec v0.1
+Built for hackathon, not pitch.
+Python + TypeScript
+Docent Team
+This document is implementation-first. Every API, schema, and prompt is designed to be coded in 36 hours by 2 engineers. No vapor, no AI slop, no purple gradients.
+root
+href
+http:
+https:
+_blank
+noopener noreferrer
+a[href]
+loading
+DOMContentLoaded
+click
+a[href]
