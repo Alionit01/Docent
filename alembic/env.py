@@ -13,6 +13,7 @@ if config.config_file_name is not None:
 
 from app.db import async_session
 from app.models.base import Base
+import app.models.models  # noqa: F401 — register ORM models with Base.metadata
 
 target_metadata = Base.metadata
 
