@@ -1,7 +1,8 @@
 import os
 import asyncio
 import fitz
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db, async_session
 from app.core.errors import AppError
@@ -54,6 +55,21 @@ async def upload_document(
     asyncio.create_task(run_pipeline(doc_id, filepath, async_session))
 
     return UploadResponse(id=doc_id, filename=file.filename, status="processing", page_count=page_count)
+
+
+@router.get("", response_model=list[Document])
+async def list_documents(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    result = await db.execute(
+        select(DocumentModel)
+        .order_by(DocumentModel.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return result.scalars().all()
 
 
 @router.get("/{document_id}", response_model=Document)
