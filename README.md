@@ -38,17 +38,21 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Create the database
+### 3. Set up PostgreSQL
 
-Connect to your local Postgres as a superuser and run:
+The app connects to a local PostgreSQL instance using the `postgres` superuser (password `root`) and a database named `docent`.
+
+**Prerequisites:** PostgreSQL 16 installed and running locally on port `5432`.
+
+**Create the database** — connect to Postgres as a superuser (e.g. via `psql -U postgres`) and run:
 
 ```sql
-CREATE USER docent WITH PASSWORD 'docent';
-CREATE DATABASE docent OWNER docent;
-GRANT ALL PRIVILEGES ON DATABASE docent TO docent;
+CREATE DATABASE docent;
 ```
 
-If your Postgres already has a `docent` database/user, skip this.
+The `docent` database must exist before running migrations. The app does NOT create users or the database itself — it only connects to what's already there.
+
+> **Credentials:** The app uses `postgres` / `root` as configured in `.env` (`DATABASE_URL=postgresql+asyncpg://postgres:root@localhost:5432/docent`). Adjust `DATABASE_URL` if your local Postgres uses different credentials.
 
 ### 4. Configure environment
 
@@ -61,7 +65,7 @@ cp .env.example .env
 Minimal `.env`:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://docent:docent@localhost:5432/docent
+DATABASE_URL=postgresql+asyncpg://postgres:root@localhost:5432/docent
 LLM_PROVIDER=groq
 LLM_API_KEY=your_groq_api_key_here
 LLM_BASE_URL=https://api.groq.com/openai/v1
