@@ -100,23 +100,46 @@ venv\Scripts\python.exe -m uvicorn app.main:app --reload
 The API will be available at `http://127.0.0.1:8000`.
 Swagger docs: `http://127.0.0.1:8000/docs`
 
+## What the Backend Can Do
+
+Docent is an **AI Document Teaching System**. You upload a PDF and the backend:
+
+- **Ingests & understands documents** — parses PDF text (PyMuPDF), detects chapter headings by font size, strips headers/footers, de-hyphenates, and splits into 800-token chunks (tiktoken). Chunks are embedded with a local CPU model (`all-MiniLM-L6-v2`) and stored in ChromaDB for semantic search, with metadata in PostgreSQL.
+- **Generates a chapter roadmap** — the LLM reads the first portion of the document and produces an ordered list of chapters with summaries.
+- **Teaches with Feynman-style lessons** — for any chapter and learning goal (`exam` / `understand` / `implement` / `research`), it generates a plain-language explanation, a real-world analogy, key points, and verbatim source citations (page + chunk). Lessons are cached per (chapter, goal).
+- **Quizzes the learner** — every lesson gets 2 MCQs with document-grounded distractors. A separate "final quiz" produces 10 mixed questions from weak-area chapters.
+- **Answers questions grounded in the document** — `/ask` embeds your question, retrieves the top-k relevant chunks from ChromaDB, and the LLM answers with citations. Falls back to keyword search if vectors are missing. Never hallucinates outside the document.
+- **Tracks progress** — scores quiz attempts, marks lessons complete, computes weak areas (chapters averaging <60%), and reports overall progress.
+- **Lists all ingested documents** — see every uploaded PDF and its status at a glance.
+
+Edge cases handled: PDFs <2 pages rejected, scanned PDFs (too little text) rejected, PDFs >100 pages truncated to first 50, concurrent uploads rate-limited (max 2 per IP), embedding failures degrade to keyword fallback, LLM JSON errors retried with repair prompts.
+
 ## API Endpoints
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | Health check |
 | `POST` | `/api/documents/upload` | Upload a PDF (max 50MB), starts async ingestion |
+| `GET` | `/api/documents` | List all ingested documents (id, status, etc.) |
 | `GET` | `/api/documents/{id}` | Poll document ingestion status |
 | `GET` | `/api/documents/{id}/roadmap` | Get generated chapter roadmap |
 | `GET` | `/api/documents/{id}/lessons/{chapterId}?goal=` | Get a lesson + quiz for a chapter (goal: `exam`/`understand`/`implement`/`research`) |
 | `POST` | `/api/documents/{id}/ask` | Ask a grounded question about the document |
+| `POST` | `/api/documents/{id}/lessons/{lessonId}/quiz/submit` | Submit quiz answers, get score + weak areas + next lesson |
+| `GET` | `/api/documents/{id}/progress` | Get completed lessons, scores, weak areas, overall progress |
+| `POST` | `/api/documents/{id}/quiz/final` | Generate 10 mixed MCQs from weak-area chapters |
 
 ## How it works
 
 1. **Upload** → PDF saved, `processing` row created, ingestion launched as a background task
-2. **Ingestion** → parse (PyMuPDF) → clean headers/footers → chunk (800 tokens, tiktoken) → embed (local CPU) → store in ChromaDB + Postgres → `ready`
-3. **Teaching** → roadmap generated via LLM → per-chapter lessons + quizzes cached per goal
+2. **Ingestion** → parse (PyMuPDF) → clean headers/footers → chunk (800 tokens, tiktoken) → embed (local CPU) → store in ChromaDB + Postgres → `ready` → roadmap auto-generated
+3. **Teaching** → roadmap → per-chapter lessons + quizzes cached per goal
 4. **Q&A** → embed question → ChromaDB top-k retrieval → LLM answer with citations
+5. **Progress** → quiz submissions scored → weak areas + overall progress tracked
+
+## Frontend API Tester
+
+A zero-build HTML tool lives in `frontend/`. Open `frontend/index.html` in a browser (works via `file://`) while the server runs on `:8000`. It has a panel for every endpoint with state carry-over (doc id → chapter id → lesson id) so you can click through the full flow.
 
 ## Project Structure
 
