@@ -6,4 +6,4 @@ data/uploads/*
 data/chroma/*
 !data/uploads/.gitkeep
 !data/chroma/.gitkeep
-.commandcode/*
+.commandcode/
