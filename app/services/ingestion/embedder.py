@@ -65,17 +65,16 @@ class Embedder:
         if query_embeddings is None:
             return []
 
-        where_filter = {}
+        kwargs = {
+            "query_embeddings": query_embeddings,
+            "n_results": top_k,
+            "include": ["metadatas", "documents", "distances"],
+        }
         if document_id:
-            where_filter["document_id"] = document_id
+            kwargs["where"] = {"document_id": document_id}
 
         try:
-            results = self.collection.query(
-                query_embeddings=query_embeddings,
-                n_results=top_k,
-                where=where_filter,
-                include=["metadatas", "documents", "distances"],
-            )
+            results = self.collection.query(**kwargs)
         except Exception:
             return []
 

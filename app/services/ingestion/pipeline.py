@@ -57,6 +57,13 @@ async def run_pipeline(document_id: str, filepath: str, db_session_factory):
                 doc.status = "ready"
                 await session.commit()
 
+        # Generate roadmap in background
+        from app.services.pedagogy.roadmap import generate_roadmap
+        try:
+            await generate_roadmap(document_id, db_session_factory)
+        except Exception:
+            pass  # Roadmap failure is non-fatal; can be regenerated on demand
+
     except Exception as e:
         async with db_session_factory() as session:
             doc = await session.get(Document, document_id)
