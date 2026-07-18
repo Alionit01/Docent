@@ -13,3 +13,4 @@
 - Use Groq as the LLM provider (OpenAI-compatible API via openai SDK pointed at `https://api.groq.com/openai/v1`). Confidence: 0.70
 - Use ChromaDB instead of pgvector for vector storage to minimize external dependencies. Confidence: 0.70
 - Use a local embedding model (e.g., all-MiniLM-L6-v2, 512-dim) instead of cloud-based embedding APIs. Confidence: 0.70
+- Use the llama3-70b-versatile model on Groq when structured output (json_object) is needed, as openai/gpt-oss-20b does not support response_format. Confidence: 0.80
