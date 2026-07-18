@@ -1,0 +1,100 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f1117;
+  color: #e4e4e7;
+}
+
+header {
+  padding: 16px 24px;
+  background: #1a1d27;
+  border-bottom: 1px solid #2a2e3a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 { margin: 0; font-size: 20px; }
+.base-url input { background: #0f1117; color: #e4e4e7; border: 1px solid #2a2e3a; padding: 4px 8px; border-radius: 4px; }
+
+.layout { display: flex; min-height: calc(100vh - 65px); }
+
+nav {
+  width: 200px;
+  background: #1a1d27;
+  border-right: 1px solid #2a2e3a;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-item {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  text-align: left;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.nav-item:hover { background: #232733; color: #fff; }
+
+main { flex: 1; padding: 24px; overflow-y: auto; }
+
+.state-bar {
+  background: #1a1d27;
+  border: 1px solid #2a2e3a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #a1a1aa;
+}
+
+.panel { max-width: 800px; }
+.panel.hidden { display: none; }
+.panel h2 { font-size: 16px; border-bottom: 1px solid #2a2e3a; padding-bottom: 8px; }
+
+label { display: block; margin: 12px 0; font-size: 14px; }
+input, select, textarea {
+  background: #0f1117;
+  color: #e4e4e7;
+  border: 1px solid #2a2e3a;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-left: 8px;
+  font-family: inherit;
+}
+textarea { font-family: monospace; }
+
+.send {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 8px;
+}
+.send:hover { background: #2563eb; }
+.send.secondary { background: #52525b; }
+.send.secondary:hover { background: #3f3f46; }
+
+.response { margin-top: 16px; }
+.status { font-weight: bold; padding: 6px 10px; border-radius: 4px; display: inline-block; margin-bottom: 8px; }
+.status.ok { background: #14532d; color: #86efac; }
+.status.err { background: #7f1d1d; color: #fca5a5; }
+pre {
+  background: #0f1117;
+  border: 1px solid #2a2e3a;
+  border-radius: 6px;
+  padding: 14px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

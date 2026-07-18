@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docent API Tester</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Docent API Tester</h1>
+    <div class="base-url">
+      Base URL: <input id="baseUrl" value="http://127.0.0.1:8000" size="30" />
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav id="nav">
+      <button class="nav-item" data-panel="upload">1. Upload PDF</button>
+      <button class="nav-item" data-panel="get-doc">2. Get Document</button>
+      <button class="nav-item" data-panel="roadmap">3. Roadmap</button>
+      <button class="nav-item" data-panel="lesson">4. Lesson + Quiz</button>
+      <button class="nav-item" data-panel="ask">5. Ask Question</button>
+      <button class="nav-item" data-panel="quiz-submit">6. Submit Quiz</button>
+      <button class="nav-item" data-panel="progress">7. Progress</button>
+      <button class="nav-item" data-panel="final-quiz">8. Final Quiz</button>
+    </nav>
+
+    <main>
+      <!-- Shared state display -->
+      <div id="state-bar" class="state-bar"></div>
+
+      <!-- 1. Upload -->
+      <section class="panel" id="panel-upload">
+        <h2>POST /api/documents/upload</h2>
+        <label>PDF File: <input type="file" id="upload-file" accept="application/pdf" /></label>
+        <button class="send" data-action="upload">Send</button>
+        <div class="response" id="resp-upload"></div>
+      </section>
+
+      <!-- 2. Get Document -->
+      <section class="panel hidden" id="panel-get-doc">
+        <h2>GET /api/documents/{id}</h2>
+        <label>Document ID: <input id="get-doc-id" placeholder="doc_..." /></label>
+        <button class="send" data-action="get-doc">Send</button>
+        <button class="send secondary" data-action="poll-doc">Poll until ready</button>
+        <div class="response" id="resp-get-doc"></div>
+      </section>
+
+      <!-- 3. Roadmap -->
+      <section class="panel hidden" id="panel-roadmap">
+        <h2>GET /api/documents/{id}/roadmap</h2>
+        <label>Document ID: <input id="roadmap-doc-id" placeholder="doc_..." /></label>
+        <button class="send" data-action="roadmap">Send</button>
+        <div class="response" id="resp-roadmap"></div>
+      </section>
+
+      <!-- 4. Lesson -->
+      <section class="panel hidden" id="panel-lesson">
+        <h2>GET /api/documents/{id}/lessons/{lessonId}?goal=</h2>
+        <label>Document ID: <input id="lesson-doc-id" placeholder="doc_..." /></label>
+        <label>Chapter/Lesson ID: <input id="lesson-id" placeholder="ch_... or les_..." /></label>
+        <label>Goal:
+          <select id="lesson-goal">
+            <option value="understand">understand</option>
+            <option value="exam">exam</option>
+            <option value="implement">implement</option>
+            <option value="research">research</option>
+          </select>
+        </label>
+        <button class="send" data-action="lesson">Send</button>
+        <div class="response" id="resp-lesson"></div>
+      </section>
+
+      <!-- 5. Ask -->
+      <section class="panel hidden" id="panel-ask">
+        <h2>POST /api/documents/{id}/ask</h2>
+        <label>Document ID: <input id="ask-doc-id" placeholder="doc_..." /></label>
+        <label>Question: <input id="ask-question" placeholder="What is a process?" size="40" /></label>
+        <label>Lesson Context ID (optional): <input id="ask-ctx" placeholder="les_..." /></label>
+        <button class="send" data-action="ask">Send</button>
+        <div class="response" id="resp-ask"></div>
+      </section>
+
+      <!-- 6. Quiz Submit -->
+      <section class="panel hidden" id="panel-quiz-submit">
+        <h2>POST /api/documents/{id}/lessons/{lessonId}/quiz/submit</h2>
+        <label>Document ID: <input id="qs-doc-id" placeholder="doc_..." /></label>
+        <label>Lesson ID: <input id="qs-lesson-id" placeholder="les_..." /></label>
+        <label>Answers (JSON):
+          <textarea id="qs-answers" rows="4" cols="50" placeholder='[{"question_id":"q_...","selected_index":0}]'></textarea>
+        </label>
+        <button class="send" data-action="quiz-submit">Send</button>
+        <div class="response" id="resp-quiz-submit"></div>
+      </section>
+
+      <!-- 7. Progress -->
+      <section class="panel hidden" id="panel-progress">
+        <h2>GET /api/documents/{id}/progress</h2>
+        <label>Document ID: <input id="prog-doc-id" placeholder="doc_..." /></label>
+        <button class="send" data-action="progress">Send</button>
+        <div class="response" id="resp-progress"></div>
+      </section>
+
+      <!-- 8. Final Quiz -->
+      <section class="panel hidden" id="panel-final-quiz">
+        <h2>POST /api/documents/{id}/quiz/final</h2>
+        <label>Document ID: <input id="fq-doc-id" placeholder="doc_..." /></label>
+        <button class="send" data-action="final-quiz">Send</button>
+        <div class="response" id="resp-final-quiz"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
