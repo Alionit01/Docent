@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.errors import AppError, app_error_handler
 
 
 def create_app() -> FastAPI:
@@ -12,6 +13,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.add_exception_handler(AppError, app_error_handler)
 
     @app.get("/health")
     async def health():
